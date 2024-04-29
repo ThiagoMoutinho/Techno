@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <title>Techno</title>
+</head>
+<body>
+<div id="app">
+    <header class="header">
+      <img class="logo" src="./assets/techno.svg" alt="Techno">
+      <div class="carrinho_menu" @click="carrinhoAtivo = true">
+        {{ carrinhoTotal }} | {{ carrinho.length }}
+      </div>
+    </header>
+
+    <section class="produtos">
+      <div v-for="item in produtos" @click="abrirModal(item.id)" :key="produto.id" class="produto">
+        <img :src="item.img" :alt="item.nome" class="produto_img">
+        <div class="produto_info">
+          <span class="produto_preco">{{ numeroPreco[produtos.indexOf(item)] }}</span>
+          <h2 class="produto_titulo">{{ item.nome }}</h2>
+        </div>
+      </div>
+    </section>
+
+  <section class="modal" v-if="produto" @click="fecharModal">
+    <div class="modal_container">
+      <div class="modal_img">
+        <img :src="produto.img" :alt="produto.nome">
+      </div>
+      <div class="modal_dados">
+        <button class="modal_fechar" @click="produto = false">X</button>
+        <span class="modal_preco">{{ produto.preco | numeroPreco }}</span>
+        <h2 class="modal_titulo">{{ produto.nome }}</h2>
+        <p>{{ produto.descricao }}</p>
+        <button class="modal_btn" @click="adicionarItem" v-if="produto.estoque > 0">Adicionar Item</button>
+        <button class="modal_btn esgotado" @click="adicionarItem" v-else disabled>Produto indisponível</button>
+      </div>
+      <div class="avaliacoes">
+        <h2 class="avaliacoes_subtitulo">Avaliações</h2>
+        <ul>
+          <li v-for="avaliacao in produto.reviews" class="avaliacao">
+            <p class="avaliacao_descricao">{{ avaliacao.descricao }}</p>
+            <p class="avaliacao_usuario">{{ avaliacao.nome }} | {{ avaliacao.estrelas }}</p>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <section class="carrinho_modal" :class="{ativo: carrinhoAtivo}" @click="clickForaCarrinho">
+    <div class="carrinho_container">
+      <button @click="carrinhoAtivo = false" class="carrinho_fechar">X</button>
+      <h2 class="carrinho_titulo">carrinho</h2>
+      <div v-if="carrinho.length > 0">
+        <ul class="carrinho_list">
+          <li v-for="(item, index) in carrinho" class="carrinho_item">
+            <p>{{ item.nome }}</p>
+            <p class="carrinho_preco">{{ item.preco }}</p>
+            <button class="carrinho_remover" @click="removerItem(index)">X</button>
+          </li>
+        </ul>
+        <p class="carrinho_total">{{ carrinhoTotal}}</p>
+        <button class="carrinho_finalizar">Finalizar compra</button>
+      </div>
+      <p v-else>O carrinho vazio</p>
+    </div>
+  </section>
+  <div class="alerta" :class="{ativo: alertaAtivo}">
+    <p class="alerta_mensagem">{{ mensagemAlerta }}</p>
+  </div>
+</div>
+
+<script lang="ts">
+    const { createApp, ref, onMounted, computed, watch } = Vue
+
+    createApp({
+        setup() {
+            const produtos = ref([]);
+            const produto = ref('');
+            const carrinho = ref([]);
+            const mensagemAlerta = ref('')
+            const alertaAtivo = ref(false);
+            const carrinhoAtivo = ref(false)
+
+
+            const fetchProdutos = () => {
+                fetch("./api/produtos.json")
+                    .then(r => r.json())
+                    .then(r => {
+                        produtos.value = r
+                    })
+                    .catch(e => {
+                        console.log('Erro ao buscar os produtos:', e)
+                    })
+            }
+
+            const fetchProduto = (id) => {
+                fetch(`./api/produtos/${id}/dados.json`)
+                    .then(r => r.json())
+                    .then(r => {
+                        produto.value = r
+                    })
+                    .catch(e => {
+                        console.log('Erro ao buscar os produtos', e)
+                    })
+            }
+
+            const fecharModal = ({target, currentTarget}) => {
+                if(target === currentTarget) produto.value = false
+            }
+
+            const clickForaCarrinho = ({ target, currentTarget}) => {
+                if(target === currentTarget) carrinhoAtivo.value = false
+            }
+
+            compararEstoque = () => {
+                const items = carrinho.value.filter(item => {
+                    if(item.id === produto.value.id) {
+                      return true;
+                    }
+                })
+
+                produto.value.estoque = produto.value.estoque - items.length;
+
+                console.log(items)
+            }
+
+            const adicionarItem = () => {
+              produto.value.estoque--
+              const { id, nome, preco } = produto.value
+              carrinho.value.push({id, nome, preco})
+              alerta(`${nome} adicionado ao carrinho.`);
+            }
+
+            const alerta = (mensagem) => {
+                mensagemAlerta.value = mensagem
+                alertaAtivo.value = true
+                setTimeout(() => {
+                    alertaAtivo.value = false
+                }, 1000);
+            }
+            const removerItem = (index) => {
+                 carrinho.value.splice(index, 1)
+            }
+
+            const abrirModal = (id) => {
+                fetchProduto(id)
+                window.scrollTo({
+                    top: 0,
+                    behavior: "smooth"
+                })
+            }
+
+            const checarLocalStorage = () =>  {
+                if(window.localStorage.carrinho) {
+                    carrinho.value = JSON.parse(window.localStorage.carrinho)
+                }
+            }
+
+            const router = () => {
+                const hash = document.location.hash
+                if(hash) {
+                    fetchProduto(hash.replace("#", ''))
+                }
+            }
+
+            watch(carrinho.value, (novoCarrinho) => {
+                window.localStorage.carrinho = JSON.stringify(novoCarrinho)
+            })
+
+            watch(produto, (novoProduto) => {
+                document.title = novoProduto.nome || "Techno";
+                const hash = novoProduto.id || ''
+                history.pushState(null, null,`#${hash}`)
+                if(produto.value) {
+                    compararEstoque()
+                }
+            });
+
+            const numeroPreco = computed(() =>
+                produtos.value.map(produto => produto.preco ? produto.preco.toLocaleString("pt-BR", { style: "currency", currency: "BRL"}) : ''))
+
+            const carrinhoTotal = computed(() => {
+              let total = 0;
+              if(carrinho.value.length) {
+                  carrinho.value.forEach(item => {
+                      total += item.preco
+                  })
+                  return total.toLocaleString("pt-BR", { style: "currency", currency: "BRL"})
+              }
+
+              return total
+            })
+
+
+            onMounted( () => {
+                fetchProdutos();
+                checarLocalStorage();
+                router();
+            })
+            return {
+                produtos,
+                numeroPreco,
+                produto,
+                carrinho,
+                carrinhoTotal,
+                mensagemAlerta,
+                alertaAtivo,
+                carrinhoAtivo,
+                fetchProdutos,
+                fetchProduto,
+                fecharModal,
+                abrirModal,
+                adicionarItem,
+                removerItem,
+                checarLocalStorage,
+                alerta,
+                clickForaCarrinho,
+                compararEstoque
+            }
+        }
+    }).mount('#app')
+</script>
+</body>
+</html>
